@@ -23,7 +23,7 @@ This repository contains information for the Alai challenge submission. Please f
   - Code walkthrough explaining key implementation decisions
   - Any notable features or optimizations
 
-3. Submit your application here: https://forms.gle/gNUcjQx3nQBBw4C89
+3. Submit your application here: https://forms.gle/DUAig82YwxS5BZgz6
 
 
 ## Questions or Issues?
