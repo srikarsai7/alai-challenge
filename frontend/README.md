@@ -1,6 +1,6 @@
 # Alai Coding Challenge: Hub and Spoke Implementation
 
-The goal of the challenge is to create a hub and spoke diagram similar to ![Hub and Spoke Example](https://storage.getalai.com/hub-and-spoke.png)
+The goal of the challenge is to create a hub and spoke diagram similar to ![Hub and Spoke Example](https://storage.getalai.com/hub-and-spoke-2.png)
 
 ## Getting Started
 
@@ -23,7 +23,7 @@ The goal of the challenge is to create a hub and spoke diagram similar to ![Hub 
 
 ## Notes
 
-1. Allow the user to add/remove spokes. This could be through simple buttons outside the canvas. The diagram should support 2-8 spokes
+1. Allow the user to add/remove spokes. This could be through simple buttons outside the canvas. The diagram should support 2-6 spokes
 
 2. Extra credit: Improve diagram functionality through:
 
