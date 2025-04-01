@@ -28,8 +28,7 @@ The goal of the challenge is to create a hub and spoke diagram similar to ![Hub 
 2. Extra credit: Improve diagram functionality through:
 
    - When the user moves some spoke text then move the associated spoke line automatically with it. Hint: https://examples.tldraw.com/layout-bindings
-   - Adjust spoke bubble size as more text is added in the bubbles
-   - Prevent collisions between spoke bubbles
+   - Prevent collisions between spoke textboxes
    - Moving the hub around moves the entire diagram
 
 3. Please do not spend time on the UI outside the hub and spoke diagram. The sidebar or buttons do not need to be fancy.
