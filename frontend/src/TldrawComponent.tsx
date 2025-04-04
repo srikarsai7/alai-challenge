@@ -1,22 +1,24 @@
 import {
+  TLShapeId,
   Tldraw,
   createShapeId,
   toRichText,
+  Editor,
 } from "tldraw";
 import "tldraw/tldraw.css";
 import { useRef, useState } from "react";
 
 export default function TldrawComponent() {
-  const editorRef = useRef<any>(null);
-  const [spokeCount, setSpokeCount] = useState(3); // default number of spokes
+  console.log("TldrawComponent rendered");
+  const editorRef = useRef<Editor | null>(null);
+  const [spokeCount, setSpokeCount] = useState(3);
 
-  // Called once TLDraw editor is ready
-  const onMount = (editor: any) => {
+  const onMount = (editor: Editor) => {
+    console.log("Editor mounted:", editor);
     editorRef.current = editor;
-
     const hubId = createShapeId("hub");
 
-    // Create central hub (a circle shape)
+    // Create the hub shape.
     editor.createShape({
       id: hubId,
       type: "geo",
@@ -32,71 +34,181 @@ export default function TldrawComponent() {
       },
     });
 
+    // Create initial spokes.
     createSpokes(spokeCount);
 
-    return () => {
-      editor.deleteShape(hubId);
-    };
+    // Register a change handler to update spokes when the hub or a label moves.
+    editor.on("change", () => {
+      const hubShape = editor.getShape(hubId);
+      if (!hubShape) return;
+
+      // Get hub center
+      const hubCenterX = hubShape.x + hubShape.props.w / 2;
+      const hubCenterY = hubShape.y + hubShape.props.h / 2;
+      const circleRadius = hubShape.props.w / 2;
+
+      // Filter out text (label) shapes and arrow (spoke) shapes.
+      const textShapes = editor.getCurrentPageShapes().filter((shape) => 
+        String(shape.id).includes("label-")
+      );
+      
+      const arrowShapes = editor.getCurrentPageShapes().filter((shape) => 
+        String(shape.id).includes("spoke-")
+      );
+
+      // Update each arrow to connect from hub edge to label
+      textShapes.forEach((textShape) => {
+        const textIndex = String(textShape.id).split("-")[1];
+        const matchingArrow = arrowShapes.find((arrow) =>
+          String(arrow.id).includes(`spoke-${textIndex}`)
+        );
+
+        if (matchingArrow) {
+          // Calculate angle from hub center to text
+          const angle = Math.atan2(
+            textShape.y - hubCenterY, 
+            textShape.x - hubCenterX
+          );
+
+          // Calculate the point on the edge of the circle
+          const edgeX = hubCenterX + circleRadius * Math.cos(angle);
+          const edgeY = hubCenterY + circleRadius * Math.sin(angle);
+
+          // Update the arrow
+          editor.updateShape({
+            id: matchingArrow.id,
+            props: {
+              start: { x: edgeX, y: edgeY },
+              end: { x: textShape.x, y: textShape.y },
+            },
+            type: ""
+          });
+        }
+      });
+    });
   };
 
+  // Collision prevention for label positions.
+  const preventCollisions = (
+    positions: { index: number; x: number; y: number }[],
+    circleCenter: { x: number; y: number },
+    radius: number
+  ) => {
+    const minDistance = 70;
+    let adjusted = [...positions];
+
+    const iterations = 50;
+    for (let iter = 0; iter < iterations; iter++) {
+      let moved = false;
+      for (let i = 0; i < adjusted.length; i++) {
+        for (let j = i + 1; j < adjusted.length; j++) {
+          const pos1 = adjusted[i];
+          const pos2 = adjusted[j];
+          const dx = pos2.x - pos1.x;
+          const dy = pos2.y - pos1.y;
+          const distance = Math.sqrt(dx * dx + dy * dy);
+          if (distance < minDistance) {
+            moved = true;
+            const pos1Angle = Math.atan2(pos1.y - circleCenter.y, pos1.x - circleCenter.x);
+            const pos2Angle = Math.atan2(pos2.y - circleCenter.y, pos2.x - circleCenter.x);
+            const adjustAngle = 0.05;
+            const angleDiff = ((pos2Angle - pos1Angle) + 2 * Math.PI) % (2 * Math.PI);
+            let pos1NewAngle, pos2NewAngle;
+            if (angleDiff < Math.PI) {
+              pos1NewAngle = pos1Angle - adjustAngle;
+              pos2NewAngle = pos2Angle + adjustAngle;
+            } else {
+              pos1NewAngle = pos1Angle + adjustAngle;
+              pos2NewAngle = pos2Angle - adjustAngle;
+            }
+            adjusted[i] = {
+              ...pos1,
+              x: circleCenter.x + radius * Math.cos(pos1NewAngle),
+              y: circleCenter.y + radius * Math.sin(pos1NewAngle),
+            };
+            adjusted[j] = {
+              ...pos2,
+              x: circleCenter.x + radius * Math.cos(pos2NewAngle),
+              y: circleCenter.y + radius * Math.sin(pos2NewAngle),
+            };
+          }
+        }
+      }
+      if (!moved) break;
+    }
+    return adjusted;
+  };
+
+  // Create spokes and label positions.
   const createSpokes = (count: number) => {
     const editor = editorRef.current;
     if (!editor) return;
-
-    // Center coordinates should match the hub position
-    const centerX = 300; // 250 (circle x) + 50 (half of circle width)
-    const centerY = 300; // 250 (circle y) + 50 (half of circle height)
-    const radius = 150;
-
-    const existing = editor.getCurrentPageShapes().filter((s: any) => {
+    
+    // Remove any existing spokes and labels.
+    const existing = editor.getCurrentPageShapes().filter((s) => {
       const idStr = String(s.id);
-      return idStr.includes('spoke') || idStr.includes('label');
+      return idStr.includes("spoke") || idStr.includes("label");
     });
     
     for (const shape of existing) {
       editor.deleteShape(shape.id);
     }
-
-    // Create new spokes and labels
+    
+    const hubShape = editor.getCurrentPageShapes().find((s) => 
+      String(s.id).includes("hub")
+    );
+    
+    if (!hubShape) return;
+    
+    const centerX = hubShape.x + hubShape.props.w / 2;
+    const centerY = hubShape.y + hubShape.props.h / 2;
+    const circleRadius = hubShape.props.w / 2;
+    const spokeRadius = 150;
+    
+    let labelPositions: { index: number; x: number; y: number }[] = [];
+    
     for (let i = 0; i < count; i++) {
       const angle = (2 * Math.PI * i) / count;
+      const labelX = centerX + spokeRadius * Math.cos(angle);
+      const labelY = centerY + spokeRadius * Math.sin(angle);
+      labelPositions.push({ index: i, x: labelX, y: labelY });
+    }
+    
+    if (count > 2) {
+      labelPositions = preventCollisions(
+        labelPositions, 
+        { x: centerX, y: centerY }, 
+        spokeRadius
+      );
+    }
+    
+    for (let i = 0; i < count; i++) {
+      const position = labelPositions[i];
+      const angle = Math.atan2(position.y - centerY, position.x - centerX);
+      const edgeX = centerX + circleRadius * Math.cos(angle);
+      const edgeY = centerY + circleRadius * Math.sin(angle);
       
-      // Calculate positions - now starting from the edge of the circle
-      const circleCenterX = 300; // center of the circle
-      const circleCenterY = 300;
-      const circleRadius = 50; // radius of the hub circle (100/2)
-      
-      // Point on the edge of the circle
-      const circleEdgeX = circleCenterX + circleRadius * Math.cos(angle);
-      const circleEdgeY = circleCenterY + circleRadius * Math.sin(angle);
-      
-      // Endpoint for the spoke
-      const endX = circleCenterX + radius * Math.cos(angle);
-      const endY = circleCenterY + radius * Math.sin(angle);
-
       const labelId = createShapeId(`label-${i}`);
       const spokeId = createShapeId(`spoke-${i}`);
-
-      // Create text label
+      
       editor.createShape({
         id: labelId,
         type: "text",
-        x: endX,
-        y: endY,
+        x: position.x,
+        y: position.y,
         props: {
           richText: toRichText(`Spoke ${i + 1}`),
         },
       });
-
-      // Create arrow from edge of circle to endpoint
+      
       editor.createShape({
         id: spokeId,
         type: "arrow",
         x: 0,
         y: 0,
         props: {
-          start: { x: circleEdgeX, y: circleEdgeY },
-          end: { x: endX, y: endY },
+          start: { x: edgeX, y: edgeY },
+          end: { x: position.x, y: position.y },
           arrowheadEnd: "arrow",
         },
       });
@@ -130,7 +242,7 @@ export default function TldrawComponent() {
         </button>
       </div>
       <div style={{ position: "fixed", width: "90vw", height: "90vh" }}>
-        <Tldraw hideUi={true} onMount={onMount} />
+        <Tldraw hideUi = {true} onMount={onMount} />
       </div>
     </div>
   );
